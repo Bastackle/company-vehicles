@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: postgres:16-bullseye
+    container_name: company-vehicles-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-vehicles_user}
+      POSTGRES_PASSWORD: ${DB_PASS:-vehicles_dev_pass}
+      POSTGRES_DB: ${DB_NAME:-company_vehicles}
+      TZ: Asia/Bangkok
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - vehicles_pgdata:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+
+volumes:
+  vehicles_pgdata:
