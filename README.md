@@ -106,7 +106,7 @@ docker compose up -d
 Create a `backend/.env` file:
 
 ```env
-PORT=3001
+PORT=3000
 DB_HOST=localhost
 DB_PORT=5432
 DB_USER=vehicles_user
@@ -122,15 +122,15 @@ npm install
 npm run start:dev
 ```
 
-- **Backend API:** `http://localhost:3001`
-- **Swagger UI:** `http://localhost:3001/api/docs`
+- **Backend API:** `http://localhost:3000`
+- **Swagger UI:** `http://localhost:3000/api/docs`
 
 ### 3. Setup & Run Frontend (React + Vite)
 
 Create a `frontend/.env` file:
 
 ```env
-VITE_API_BASE_URL=http://localhost:3001
+VITE_API_BASE_URL=http://localhost:3000
 ```
 
 In a separate terminal, install dependencies and start the Vite development server:
