@@ -29,7 +29,14 @@ export function App() {
   }, []);
 
   return (
-    <ConfigProvider locale={thTH}>
+    <ConfigProvider 
+      locale={thTH}
+      theme={{
+        token: {
+          fontFamily: "'IBM Plex Sans Thai', -apple-system, BlinkMacSystemFont, sans-serif",
+        },
+      }}
+    >
       <BrowserRouter>
         {!isLoggedIn ? (
           <Routes>
