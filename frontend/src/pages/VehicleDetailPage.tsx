@@ -8,49 +8,55 @@ import {
   Card,
   Descriptions,
   Popconfirm,
+  Skeleton,
   Space,
   Typography,
   message,
 } from 'antd';
 import { useNavigate, useParams } from 'react-router-dom';
 import { StatusTag } from '../components/StatusTag';
-import type { Vehicle } from '../data/mockVehicles';
+import vehicleService, { type Vehicle } from '../services/vehicleApi';
+import { useEffect, useState } from 'react';
 
-interface VehicleDetailPageProps {
-  vehicles: Vehicle[];
-  onDeleteVehicle: (id: number) => void;
-}
-
-export function VehicleDetailPage({
-  vehicles,
-  onDeleteVehicle,
-}: VehicleDetailPageProps) {
+export function VehicleDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const vehicle = vehicles.find((v) => v.id === Number(id));
+  const [vehicle, setVehicle] = useState<Vehicle | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  if (!vehicle) {
+  useEffect(() => {
+    if (!id) return;
+    setLoading(true);
+    vehicleService.getVehicleById(Number(id))
+      .then(setVehicle)
+      .catch(() => {
+        message.error('ไม่พบข้อมูลรถยนต์ที่ต้องการ');
+        navigate('/vehicles');
+      })
+      .finally(() => setLoading(false));
+  }, [id, navigate]);
+
+  const handleDelete = async () => {
+    if (!vehicle) return;
+    try {
+      await vehicleService.deleteVehicle(vehicle.id);
+      message.success('ลบข้อมูลรถยนต์เรียบร้อยแล้ว');
+      navigate('/vehicles');
+    } catch {
+      message.error('ไม่สามารถลบข้อมูลรถยนต์ได้');
+    }
+  };
+
+  if (loading) {
     return (
       <Card>
-        <Typography.Text>ไม่พบข้อมูลรถยนต์ที่ต้องการ</Typography.Text>
-        <div style={{ marginTop: 12 }}>
-          <Button
-            icon={<ArrowLeftOutlined />}
-            onClick={() => navigate('/vehicles')}
-          >
-            กลับหน้ารายการ
-          </Button>
-        </div>
+        <Skeleton active />
       </Card>
     );
   }
 
-  const handleDelete = () => {
-    onDeleteVehicle(vehicle.id);
-    message.success('ลบข้อมูลรถยนต์เรียบร้อยแล้ว (Mock)');
-    navigate('/vehicles');
-  };
+  if (!vehicle) return null;
 
   return (
     <Card
@@ -61,7 +67,7 @@ export function VehicleDetailPage({
             onClick={() => navigate("/vehicles")}
           ></Button>
            <Typography.Title level={5} style={{ margin: 0 }}>
-            รายละเอียดรถยนต์: {vehicle.licensePlate}
+            รายละเอียดรถยนต์: {vehicle.carNumber}
           </Typography.Title>
         </Space>
       }
@@ -92,13 +98,13 @@ export function VehicleDetailPage({
     >
       <Descriptions bordered column={{ xs: 1, sm: 2 }}>
         <Descriptions.Item label="ทะเบียนรถ">
-          <Typography.Text strong>{vehicle.licensePlate}</Typography.Text>
+          <Typography.Text strong>{vehicle.carNumber}</Typography.Text>
         </Descriptions.Item>
         <Descriptions.Item label="สถานะ">
           <StatusTag status={vehicle.status} />
         </Descriptions.Item>
-        <Descriptions.Item label="ยี่ห้อรถ">{vehicle.brand}</Descriptions.Item>
-        <Descriptions.Item label="รุ่นรถ">{vehicle.model}</Descriptions.Item>
+        <Descriptions.Item label="ยี่ห้อรถ">{vehicle.carBrand}</Descriptions.Item>
+        <Descriptions.Item label="รุ่นรถ">{vehicle.carModel}</Descriptions.Item>
         <Descriptions.Item label="ปีที่ผลิต">
           {vehicle.year ?? '-'}
         </Descriptions.Item>

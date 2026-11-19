@@ -10,36 +10,30 @@ import {
   Typography,
   message,
 } from "antd";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import type { Vehicle, VehicleStatus } from "../data/mockVehicles";
+import vehicleService, {
+  type VehiclePayload,
+  type VehicleStatus,
+} from "../services/vehicleApi";
+import { isAxiosError } from "axios";
 
-export interface VehicleFormValues {
-  licenseLetters: string;
-  licenseNumber: string;
-  brand: string;
-  model: string;
-  year?: number | null;
-  color?: string | null;
-  status: VehicleStatus;
-  note?: string | null;
-}
-
-interface VehicleFormPageProps {
-  vehicles: Vehicle[];
-  onCreateVehicle: (values: VehicleFormValues) => void;
-  onUpdateVehicle: (id: number, values: VehicleFormValues) => void;
-}
-
-export function VehicleFormPage({
-  vehicles,
-  onCreateVehicle,
-  onUpdateVehicle,
-}: VehicleFormPageProps) {
+export function VehicleFormPage() {
   const { id } = useParams();
   const isEdit = Boolean(id);
+
   const navigate = useNavigate();
-  const [form] = Form.useForm<VehicleFormValues>();
+  const [form] = Form.useForm<{
+    licenseLetters: string;
+    licenseNumber: string;
+    carBrand: string;
+    carModel: string;
+    year?: number;
+    color?: string;
+    status?: VehicleStatus;
+    note?: string;
+  }>();
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!isEdit || !id) {
@@ -47,45 +41,73 @@ export function VehicleFormPage({
       return;
     }
 
-    const found = vehicles.find((v) => v.id === Number(id));
-    if (!found) {
-      message.error("ไม่พบข้อมูลรถยนต์ที่ต้องการแก้ไข");
+    vehicleService
+      .getVehicleById(Number(id))
+      .then((data) => {
+        const [licenseLetters, licenseNumber] = data.carNumber.split("-");
+
+        form.setFieldsValue({
+          licenseLetters,
+          licenseNumber,
+          carBrand: data.carBrand,
+          carModel: data.carModel,
+          year: data.year ?? undefined,
+          color: data.color ?? undefined,
+          status: data.status,
+          note: data.note ?? undefined,
+        });
+      })
+      .catch(() => {
+        message.error("ไม่พบข้อมูลรถยนต์ที่ต้องการแก้ไข");
+        navigate("/vehicles");
+      });
+  }, [id, isEdit, form, navigate]);
+
+  const handleFinish = async (values: {
+    licenseLetters: string;
+    licenseNumber: string;
+    carBrand: string;
+    carModel: string;
+    year?: number;
+    color?: string;
+    status?: VehicleStatus;
+    note?: string;
+  }) => {
+    setSubmitting(true);
+
+    try {
+      const payload: VehiclePayload = {
+        carNumber: `${values.licenseLetters.trim()}-${values.licenseNumber.trim()}`,
+        carBrand: values.carBrand.trim(),
+        carModel: values.carModel.trim(),
+        year: values.year ?? null,
+        color: values.color?.trim() || null,
+        status: values.status ?? "AVAILABLE",
+        note: values.note?.trim() || null,
+      };
+      
+      if (isEdit && id) {
+        await vehicleService.updateVehicle(Number(id), payload);
+        message.success("อัปเดตข้อมูลรถยนต์เรียบร้อยแล้ว");
+      } else {
+        await vehicleService.createVehicle(payload);
+        message.success("เพิ่มข้อมูลรถยนต์เรียบร้อยแล้ว");
+      }
+
       navigate("/vehicles");
-      return;
+    } catch (err) {
+      if (isAxiosError(err) && err.response?.data?.message) {
+        const msg = Array.isArray(err.response.data.message)
+          ? err.response.data.message.join(", ")
+          : err.response.data.message;
+
+        message.error(msg);
+      } else {
+        message.error("บันทึกข้อมูลไม่สำเร็จ");
+      }
+    } finally {
+      setSubmitting(false);
     }
-
-    form.setFieldsValue({
-      licenseLetters: found.licensePlate.split("-")[0],
-      licenseNumber: found.licensePlate.split("-")[1],
-      brand: found.brand,
-      model: found.model,
-      year: found.year,
-      color: found.color,
-      status: found.status,
-      note: found.note,
-    });
-  }, [id, isEdit, vehicles, form, navigate]);
-
-  const handleFinish = (values: VehicleFormValues) => {
-    const normalized = {
-      licensePlate: `${values.licenseLetters.trim()}-${values.licenseNumber.trim()}`,
-      brand: values.brand.trim(),
-      model: values.model.trim(),
-      year: values.year ?? null,
-      color: values.color?.trim() || null,
-      status: values.status ?? "AVAILABLE",
-      note: values.note?.trim() || null,
-    };
-
-    if (isEdit && id) {
-      onUpdateVehicle(Number(id), normalized);
-      message.success("อัปเดตข้อมูลรถยนต์เรียบร้อยแล้ว");
-    } else {
-      onCreateVehicle(normalized);
-      message.success("เพิ่มข้อมูลรถยนต์เรียบร้อยแล้ว");
-    }
-
-    navigate("/vehicles");
   };
 
   return (
@@ -109,7 +131,7 @@ export function VehicleFormPage({
         onFinish={handleFinish}
         initialValues={{ status: "AVAILABLE" }}
       >
-        <Form.Item label="ทะเบียนรถ" required style={{marginBottom: 10}}>
+        <Form.Item label="ทะเบียนรถ" required style={{ marginBottom: 10 }}>
           <Space.Compact style={{ width: "100%" }}>
             <Form.Item
               name="licenseLetters"
@@ -137,18 +159,18 @@ export function VehicleFormPage({
 
         <Form.Item
           label="ยี่ห้อรถ"
-          name="brand"
+          name="carBrand"
           rules={[{ required: true, message: "กรุณาระบุยี่ห้อรถ" }]}
-          style={{marginBottom: 30}}
+          style={{ marginBottom: 30 }}
         >
           <Input placeholder="เช่น Toyota, Honda, Isuzu" />
         </Form.Item>
 
         <Form.Item
           label="รุ่นรถ"
-          name="model"
+          name="carModel"
           rules={[{ required: true, message: "กรุณาระบุรุ่นรถ" }]}
-          style={{marginBottom: 30}}
+          style={{ marginBottom: 30 }}
         >
           <Input placeholder="เช่น Hilux Revo, Civic FE" />
         </Form.Item>
@@ -185,8 +207,8 @@ export function VehicleFormPage({
           />
         </Form.Item>
 
-        <Space style={{ marginTop:20, marginBottom:20 }}>
-          <Button type="primary" htmlType="submit" icon={<SaveOutlined />}>
+        <Space style={{ marginTop: 20, marginBottom: 20 }}>
+          <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={submitting}>
             บันทึกข้อมูล
           </Button>
           <Button onClick={() => navigate("/vehicles")}>ยกเลิก</Button>

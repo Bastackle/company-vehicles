@@ -16,57 +16,73 @@ import {
   message,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { StatusTag } from '../components/StatusTag';
-import type { Vehicle } from '../data/mockVehicles';
+import vehicleService, { type Vehicle } from '../services/vehicleApi';
 
-interface VehicleListPageProps {
-  vehicles: Vehicle[];
-  onDeleteVehicle: (id: number) => void;
-}
-
-export function VehicleListPage({
-  vehicles,
-  onDeleteVehicle,
-}: VehicleListPageProps) {
+export function VehicleListPage() {
   const navigate = useNavigate();
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [loading, setLoading] = useState(false);
+
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
+  const [total, setTotal] = useState(0);
 
-  const filteredVehicles = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return vehicles;
-    return vehicles.filter(
-      (v) =>
-        v.licensePlate.toLowerCase().includes(q) ||
-        v.brand.toLowerCase().includes(q) ||
-        v.model.toLowerCase().includes(q)
-    );
-  }, [vehicles, searchQuery]);
+  const fetchList = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await vehicleService.getVehicles({
+        search: searchQuery || undefined,
+        page,
+        limit: pageSize,
+      });
 
-  const pagedVehicles = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return filteredVehicles.slice(start, start + pageSize);
-  }, [filteredVehicles, page, pageSize]);
+      if (res.meta.total > 0 && page > res.meta.totalPages) {
+        setPage(res.meta.totalPages);
+        return;
+      }
+
+      setVehicles(res.data);
+      setTotal(res.meta.total);
+    } catch {
+      message.error('ไม่สามารถโหลดข้อมูลรถยนต์ได้');
+    } finally {
+      setLoading(false);
+    }
+  }, [searchQuery, page, pageSize]);
+
+  useEffect(() => {
+    fetchList();
+  }, [fetchList]);
 
   const handleSearch = (value: string) => {
     setPage(1);
     setSearchQuery(value.trim());
   };
 
-  const handleDelete = (id: number) => {
-    onDeleteVehicle(id);
-    message.success('ลบข้อมูลรถยนต์เรียบร้อยแล้ว (Mock)');
+  const handleDelete = async (id: number) => {
+    try {
+      await vehicleService.deleteVehicle(id);
+      message.success('ลบข้อมูลรถยนต์เรียบร้อยแล้ว');
+      if (vehicles.length === 1 && page > 1) {
+        setPage((prev) => prev - 1);
+      } else {
+        fetchList();
+      }
+    } catch {
+      message.error('ไม่สามารถลบข้อมูลรถยนต์ได้');
+    }
   };
 
   const columns: ColumnsType<Vehicle> = [
     {
       title: 'ทะเบียนรถ',
-      dataIndex: 'licensePlate',
-      key: 'licensePlate',
+      dataIndex: 'carNumber',
+      key: 'carNumber',
       render: (text: string, record) => (
         <Link to={`/vehicles/${record.id}`}>
           <Typography.Text strong>{text}</Typography.Text>
@@ -75,13 +91,13 @@ export function VehicleListPage({
     },
     {
       title: 'ยี่ห้อ',
-      dataIndex: 'brand',
-      key: 'brand',
+      dataIndex: 'carBrand',
+      key: 'carBrand',
     },
     {
       title: 'รุ่น',
-      dataIndex: 'model',
-      key: 'model',
+      dataIndex: 'carModel',
+      key: 'carModel',
     },
     {
       title: 'ปี',
@@ -122,7 +138,7 @@ export function VehicleListPage({
           </Button>
           <Popconfirm
             title="ยืนยันการลบข้อมูลรถคันนี้?"
-            description={`ทะเบียน ${record.licensePlate}`}
+            description={`ทะเบียน ${record.carNumber}`}
             okText="ลบ"
             cancelText="ยกเลิก"
             okButtonProps={{ danger: true }}
@@ -180,11 +196,12 @@ export function VehicleListPage({
       <Table
         rowKey="id"
         columns={columns}
-        dataSource={pagedVehicles}
+        dataSource={vehicles}
+        loading={loading}
         pagination={{
           current: page,
           pageSize,
-          total: filteredVehicles.length,
+          total,
           showSizeChanger: true,
           pageSizeOptions: [5, 10, 20],
           onChange: (nextPage, nextSize) => {
